@@ -1,0 +1,347 @@
+---
+title: "Churn Statistical Analysis"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Load Libraries
+
+```{r libraries}
+required_pkgs <- c("readxl", "dplyr", "ggplot2", "caret", "randomForest", "broom")
+new_pkgs <- required_pkgs[!required_pkgs %in% installed.packages()[, "Package"]]
+if (length(new_pkgs)) install.packages(new_pkgs, repos = "https://cloud.r-project.org")
+
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(randomForest)
+library(broom)
+```
+
+## Load & Merge Data
+
+Both files share the `Phone` and `Area Code` columns, which are used as join keys.
+
+```{r load-merge}
+calls    <- read_xls("CallsData.xls")
+contract <- read.csv("ContractData.csv", stringsAsFactors = TRUE)
+
+# Standardise key column names before joining
+# contract already reads "Area Code" as Area.Code; align calls to match
+calls <- calls %>% rename(Area.Code = `Area Code`)
+
+churn <- inner_join(contract, calls, by = c("Phone", "Area.Code"))
+
+# Sanitise all column names (replace spaces/special chars with dots)
+# so that formula-based models (glm, randomForest) work without issues
+names(churn) <- make.names(names(churn), unique = TRUE)
+
+# Convert binary columns to factors for cleaner plots
+churn <- churn %>%
+  mutate(
+    Churn       = factor(Churn,       labels = c("No Churn", "Churn")),
+    Int.l.Plan  = factor(Int.l.Plan,  labels = c("No Intl Plan", "Intl Plan")),
+    VMail.Plan  = factor(VMail.Plan,  labels = c("No VMail", "VMail"))
+  )
+
+glimpse(churn)
+```
+
+## Plot 1 — Churn Distribution
+
+```{r plot-churn-dist}
+ggplot(churn, aes(x = Churn, fill = Churn)) +
+  geom_bar(width = 0.5, show.legend = FALSE) +
+  geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.5) +
+  scale_fill_manual(values = c("steelblue", "tomato")) +
+  labs(
+    title = "Customer Churn Distribution",
+    x     = NULL,
+    y     = "Count"
+  ) +
+  theme_minimal()
+```
+
+## Plot 2 — Day Minutes by Churn
+
+```{r plot-day-mins}
+ggplot(churn, aes(x = Churn, y = Day.Mins, fill = Churn)) +
+  geom_boxplot(show.legend = FALSE, outlier.alpha = 0.3) +
+  scale_fill_manual(values = c("steelblue", "tomato")) +
+  labs(
+    title = "Day Minutes by Churn Status",
+    x     = NULL,
+    y     = "Day Minutes"
+  ) +
+  theme_minimal()
+```
+
+## Plot 3 — Customer Service Calls by Churn
+
+```{r plot-custserv}
+ggplot(churn, aes(x = factor(CustServ.Calls), fill = Churn)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c("steelblue", "tomato")) +
+  labs(
+    title = "Churn Rate by Number of Customer Service Calls",
+    x     = "Customer Service Calls",
+    y     = "Proportion",
+    fill  = NULL
+  ) +
+  theme_minimal()
+```
+
+## Plot 4 — International Plan vs Churn
+
+```{r plot-intl-plan}
+ggplot(churn, aes(x = Int.l.Plan, fill = Churn)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c("steelblue", "tomato")) +
+  labs(
+    title = "Churn Rate by International Plan",
+    x     = NULL,
+    y     = "Proportion",
+    fill  = NULL
+  ) +
+  theme_minimal()
+```
+
+## Plot 5 — Total Charges Distribution by Churn
+
+```{r plot-total-charges}
+churn <- churn %>%
+  mutate(Total.Charge = Day.Charge + Eve.Charge + Night.Charge + Intl.Charge)
+
+ggplot(churn, aes(x = Total.Charge, fill = Churn)) +
+  geom_density(alpha = 0.5) +
+  scale_fill_manual(values = c("steelblue", "tomato")) +
+  labs(
+    title = "Total Charge Distribution by Churn Status",
+    x     = "Total Charge ($)",
+    y     = "Density",
+    fill  = NULL
+  ) +
+  theme_minimal()
+```
+
+## Plot 6 — Account Length vs Total Charge
+
+```{r plot-scatter}
+ggplot(churn, aes(x = Account.Length, y = Total.Charge, colour = Churn)) +
+  geom_point(alpha = 0.4, size = 1.5) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
+  scale_colour_manual(values = c("steelblue", "tomato")) +
+  labs(
+    title  = "Account Length vs Total Charge",
+    x      = "Account Length (months)",
+    y      = "Total Charge ($)",
+    colour = NULL
+  ) +
+  theme_minimal()
+```
+
+---
+
+## Predictive Modelling: Estimating Churn
+
+The target variable `Churn` is binary (No Churn / Churn), so we need a **classification** model.
+Two well-suited candidates for this problem are:
+
+### Option 1 — Logistic Regression
+
+Logistic Regression models the **probability** that a customer churns as a function of the
+predictors, using the logistic (sigmoid) function to keep outputs in \([0, 1]\):
+
+\[
+P(\text{Churn} = 1 \mid \mathbf{x}) = \frac{1}{1 + e^{-(\beta_0 + \beta_1 x_1 + \cdots + \beta_p x_p)}}
+\]
+
+**Advantages:**
+
+- Highly interpretable — coefficients express the log-odds change per unit predictor increase.
+- Fast to train, works well even with relatively small datasets.
+- Provides calibrated probability estimates out of the box.
+
+**Limitations:**
+
+- Assumes a linear relationship between predictors and the log-odds of the outcome.
+- Sensitive to highly correlated predictors (multicollinearity).
+
+### Option 2 — Random Forest
+
+Random Forest builds an **ensemble of decision trees**, each trained on a random bootstrap
+sample of the data and a random subset of features. The final prediction is the majority vote
+across all trees.
+
+**Advantages:**
+
+- Captures non-linear relationships and interaction effects automatically.
+- Robust to outliers and does not require feature scaling.
+- Provides variable importance scores, helping identify the key drivers of churn.
+
+**Limitations:**
+
+- Less interpretable than Logistic Regression ("black-box" nature).
+- More computationally expensive to train and tune.
+
+---
+
+### Model Preparation
+
+We proceed with **Logistic Regression** as the primary model given its interpretability,
+and use **Random Forest** as a complementary model to capture non-linear patterns.
+Both are evaluated on a held-out test set (30 % of the data).
+
+```{r model-prep}
+library(caret)
+
+# Re-encode Churn as a clean binary factor (required by caret)
+churn_model <- churn %>%
+  mutate(Churn = factor(Churn, levels = c("No Churn", "Churn")))
+
+# Drop identifier columns not useful for prediction
+churn_model <- churn_model %>%
+  select(-Phone, -State, -Area.Code)
+
+# Train / test split (70 / 30)
+set.seed(42)
+train_idx <- createDataPartition(churn_model$Churn, p = 0.70, list = FALSE)
+train_set <- churn_model[ train_idx, ]
+test_set  <- churn_model[-train_idx, ]
+
+cat("Train rows:", nrow(train_set), "| Test rows:", nrow(test_set), "\n")
+```
+
+---
+
+## Model 1 — Logistic Regression
+
+```{r logistic-regression}
+log_model <- glm(Churn ~ ., data = train_set, family = binomial)
+
+summary(log_model)
+```
+
+```{r logistic-eval}
+log_probs <- predict(log_model, newdata = test_set, type = "response")
+log_preds <- factor(ifelse(log_probs >= 0.5, "Churn", "No Churn"),
+                    levels = c("No Churn", "Churn"))
+
+cm_log <- confusionMatrix(log_preds, test_set$Churn, positive = "Churn")
+print(cm_log)
+```
+
+```{r logistic-importance}
+# Visualise significant predictors via odds ratios
+log_coefs <- broom::tidy(log_model, exponentiate = TRUE, conf.int = TRUE) %>%
+  filter(term != "(Intercept)") %>%
+  arrange(desc(estimate))
+
+ggplot(log_coefs, aes(x = reorder(term, estimate), y = estimate)) +
+  geom_point(size = 3, colour = "steelblue") +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.3, colour = "steelblue") +
+  geom_hline(yintercept = 1, linetype = "dashed", colour = "grey50") +
+  coord_flip() +
+  labs(
+    title = "Logistic Regression — Odds Ratios with 95% CI",
+    x     = NULL,
+    y     = "Odds Ratio"
+  ) +
+  theme_minimal()
+```
+
+---
+
+## Model 2 — Random Forest
+
+```{r random-forest}
+library(randomForest)
+
+set.seed(42)
+rf_model <- randomForest(Churn ~ ., data = train_set, ntree = 300, importance = TRUE)
+
+print(rf_model)
+```
+
+```{r rf-eval}
+rf_preds <- predict(rf_model, newdata = test_set)
+
+cm_rf <- confusionMatrix(rf_preds, test_set$Churn, positive = "Churn")
+print(cm_rf)
+```
+
+```{r rf-importance}
+# Variable importance plot
+varImpPlot(rf_model, main = "Random Forest — Variable Importance")
+```
+
+---
+
+## Model Comparison
+
+```{r model-comparison}
+results <- data.frame(
+  Model     = c("Logistic Regression", "Random Forest"),
+  Accuracy  = c(cm_log$overall["Accuracy"],  cm_rf$overall["Accuracy"]),
+  Precision = c(cm_log$byClass["Precision"], cm_rf$byClass["Precision"]),
+  Recall    = c(cm_log$byClass["Recall"],    cm_rf$byClass["Recall"]),
+  F1        = c(cm_log$byClass["F1"],        cm_rf$byClass["F1"])
+)
+
+knitr::kable(results, digits = 4, caption = "Test-set performance comparison")
+```
+
+---
+
+## Conclusions
+
+### Overall Performance
+
+Random Forest clearly outperforms Logistic Regression across every metric on the held-out
+test set (30 % of 3,333 observations):
+
+| Metric    | Logistic Regression | Random Forest |
+|-----------|--------------------:|-------------:|
+| Accuracy  | 86.19 %             | **98.00 %**  |
+| Precision | 55.56 %             | **100.00 %** |
+| Recall    | 20.83 %             | **86.11 %**  |
+| F1        | 0.303               | **0.925**    |
+
+### Logistic Regression
+
+Although it achieves a seemingly acceptable accuracy of **86.2 %**, this figure is misleading
+given the class imbalance in the dataset (~14 % churners). The model struggles to identify
+actual churners: its **Recall of only 20.8 %** means it misses roughly 4 out of every 5
+customers who will churn — a critical failure for a retention use case where false negatives
+are costly. Its low F1 score (0.30) confirms that it is not a reliable churn detector.
+
+### Random Forest
+
+Random Forest achieves **98 % accuracy** with a **Precision of 100 %** (no false alarms) and
+a **Recall of 86.1 %** (detects the vast majority of true churners), yielding an F1 of **0.93**.
+This makes it the clearly preferred model for deployment in a churn-prevention campaign.
+
+### Key Drivers of Churn (Random Forest Variable Importance)
+
+The top predictors ranked by Mean Decrease in Gini impurity are:
+
+1. **Total Charge** (136.17) — the single strongest predictor; heavy spenders are more likely to leave.
+2. **Customer Service Calls** (68.97) — repeated contacts signal dissatisfaction and strongly anticipate churn.
+3. **Day Charge / Day Mins** (~46) — high daytime usage costs drive customers away.
+4. **International Plan** (40.08) — customers on the international plan churn at a disproportionately high rate.
+5. **VMail Messages** (27.33) — lower voicemail engagement is associated with churn.
+
+### Recommendations
+
+- **Prioritise high-billing customers** for proactive retention offers before they reach the churn threshold.
+- **Flag customers with ≥ 3 service calls** for immediate intervention; dissatisfaction escalates quickly.
+- **Review the International Plan pricing** — its strong association with churn suggests it may not deliver perceived value.
+- For production use, consider **threshold tuning** on the Random Forest probability output to further optimise
+  the Recall/Precision trade-off according to the cost of false negatives vs. false positives.

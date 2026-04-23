@@ -1,0 +1,50 @@
+---
+title: "Churn Data Exploration"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Libraries
+
+```{r libraries}
+library(readxl)
+```
+
+## Load Data
+
+```{r load-data}
+calls    <- read_xls("CallsData.xls")
+contract <- read.csv("ContractData.csv", stringsAsFactors = TRUE)
+```
+
+## Calls Data
+
+### Structure
+
+```{r calls-str}
+str(calls)
+```
+
+### Summary
+
+```{r calls-summary}
+summary(calls)
+```
+
+## Contract Data
+
+### Structure
+
+```{r contract-str}
+str(contract)
+```
+
+### Summary
+
+```{r contract-summary}
+summary(contract)
+```

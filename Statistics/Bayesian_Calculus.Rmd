@@ -1,5 +1,5 @@
 ---
-title: "Calculo Bayesiano"
+title: "Bayesian Calculus"
 author: "Ruben Cabrera"
 date: "2026-04"
 output: 
@@ -13,9 +13,9 @@ editor_options:
     wrap: 72
 ---
 
-### Cálculo de Distribución a Posteriori en R
+### Posterior Distribution Calculation in R
 
-Este ejemplo demuestra el cálculo de una distribución a posteriori para la probabilidad de éxito de una moneda, utilizando una distribución a priori Beta y datos simulados de lanzamientos de moneda en R.
+This example demonstrates the calculation of a posterior distribution for the success probability of a coin, using a Beta prior distribution and simulated coin toss data in R.
 
 ```{r}
 # Load necessary libraries
@@ -26,93 +26,93 @@ library(tidyr)   # For data reshaping (pivot_longer)
 
 ```
 
-## Ejemplo de la distribución Bernoulli
+## Bernoulli Distribution Example
 
-El fenómeno a estudiar es una secuencia de lanzamientos
+The phenomenon under study is a sequence of coin tosses.
 
-### 1. Definir la distribución a priori (Beta)
+### 1. Define the prior distribution (Beta)
 
-Una Beta(1,1) es una distribución uniforme, lo que significa que todas las probabilidades son igualmente probables a priori.
+A Beta(1,1) is a uniform distribution, which means that all probabilities are equally likely a priori.
 
 ```{r}
 alfa_prior <- 1
 beta_prior <- 1
 
-cat(sprintf("A priori: Beta(alfa=%g, beta=%g)\n", alfa_prior, beta_prior))
+cat(sprintf("Prior: Beta(alpha=%g, beta=%g)\n", alfa_prior, beta_prior))
 ```
 
 ```{r}
-# Rango de posibles valores para la probabilidad 'p'
+# Range of possible values for the probability 'p'
 p_values <- seq(0, 1, length.out = 100)
 
-# Calcular las densidades de la distribución a priori
+# Calculate the densities of the prior distribution
 prior_pdf_values <- dbeta(p_values, alfa_prior, beta_prior)
 
-# Crear un data frame para ggplot2
+# Create a data frame for ggplot2
 df_prior_plot <- data.frame(
   p = p_values,
   prior_density = prior_pdf_values
 )
 
-# Crear el gráfico de la distribución a priori
+# Create the prior distribution plot
 ggplot(df_prior_plot, aes(x = p, y = prior_density)) +
   geom_line(color = 'blue', linewidth = 1) +
-  labs(title = 'Distribución a Priori (Beta(1,1))',
-       x = 'Probabilidad de Éxito (p)',
-       y = 'Densidad de Probabilidad') +
+  labs(title = 'Prior Distribution (Beta(1,1))',
+       x = 'Success Probability (p)',
+       y = 'Probability Density') +
   theme_minimal()
 ```
 
-### 2. Datos (lanzamientos de moneda)
+### 2. Data (coin tosses)
 
-Supongamos una 'verdadera' probabilidad de éxito de la moneda
+Suppose a 'true' success probability for the coin.
 ```{r}
 p_true <- 0.7
 num_lanzamientos <- 10
 
-# Simular lanzamientos de moneda
+# Simulate coin tosses
 set.seed(123)
 datos_simulados <- rbinom(num_lanzamientos, 1, p_true)
-cat(sprintf("\nDatos simulados:"))
+cat(sprintf("\nSimulated data:"))
 datos_simulados
 
-# Contar éxitos (caras) y fracasos (cruces)
+# Count successes (heads) and failures (tails)
 num_exitos <- sum(datos_simulados)
 num_fracasos <- num_lanzamientos - num_exitos
 
-cat(sprintf("\nDatos simulados: %g lanzamientos. Éxitos (caras): %g, Fracasos (cruces): %g\n", num_lanzamientos, num_exitos, num_fracasos))
+cat(sprintf("\nSimulated data: %g tosses. Successes (heads): %g, Failures (tails): %g\n", num_lanzamientos, num_exitos, num_fracasos))
 ```
 
-### 3. Calculo de la distribución a posteriori
+### 3. Posterior distribution calculation
 
-Para una priori Beta y una verosimilitud Binomial, la posteriori también es Beta.
+For a Beta prior and a Binomial likelihood, the posterior is also Beta.
 
 ```{r}
 alfa_posterior <- alfa_prior + num_exitos
 beta_posterior <- beta_prior + num_fracasos
 
-cat(sprintf("A posteriori: Beta(alfa=%g, beta=%g)\n", alfa_posterior, beta_posterior))
+cat(sprintf("Posterior: Beta(alpha=%g, beta=%g)\n", alfa_posterior, beta_posterior))
 ```
 
-### Visualización
+### Visualization
 
 ```{r}
-# Rango de posibles valores para la probabilidad 'p'
+# Range of possible values for the probability 'p'
 p_values <- seq(0, 1, length.out = 100)
 
-# Calcular las densidades de las distribuciones
+# Calculate the densities of the distributions
 prior_pdf_values <- dbeta(p_values, alfa_prior, beta_prior)
 
-# Calcular la verosimilitud (no normalizada)
+# Calculate the likelihood (unnormalized)
 likelihood_values <- (p_values^num_exitos) * ((1-p_values)^num_fracasos)
 
-# Escalar la verosimilitud para que sea comparable con las PDFs
+# Scale the likelihood to make it comparable with the PDFs
 likelihood_scaled <- likelihood_values / max(likelihood_values) * max(prior_pdf_values)
 
-# Calcular la densidad de la distribución a posteriori
+# Calculate the density of the posterior distribution
 posterior_pdf_values <- dbeta(p_values, alfa_posterior, beta_posterior)
 
-# Crear un data frame para ggplot2
+# Create a data frame for ggplot2
 df_plot <- data.frame(
   p = p_values,
   prior = prior_pdf_values,
@@ -122,269 +122,268 @@ df_plot <- data.frame(
 
 ```
 
-
-Datos completos
+Complete data
 ```{r}
 head(df_plot)
 ```
 
 ```{r}
-# Reestructurar el data frame para ggplot2 (formato largo)
+# Reshape the data frame for ggplot2 (long format)
 df_long <- df_plot %>%
   pivot_longer(cols = -p, names_to = "type", values_to = "density") %>%
-  # Asignar nombres más descriptivos y orden para la leyenda/etiquetas
+  # Assign more descriptive names and order for the legend/labels
   mutate(type = factor(type, levels = c("prior", "likelihood", "posterior"),
-                       labels = c("A Priori", "Verosimilitud", "A Posteriori")))
-cat(sprintf("\nDatos nuevos"))
+                       labels = c("Prior", "Likelihood", "Posterior")))
+cat(sprintf("\nNew data"))
 head(df_long)
 ```
 
 ```{r}
-# Preparar un dataframe para las etiquetas de texto en el gráfico
-# Encontrar el punto de máxima densidad para cada curva para posicionar las etiquetas
+# Prepare a data frame for text labels in the plot
+# Find the maximum density point for each curve to position the labels
 peaks_df <- df_long %>%
   group_by(type) %>%
   filter(density == max(density)) %>%
-  slice(1) %>% # En caso de múltiples máximos (e.g., prior uniforme), toma el primero
+  slice(1) %>% # In case of multiple maxima (e.g., uniform prior), take the first
   ungroup()
 
-# Ajustar la posición y (vertical) de las etiquetas para evitar superposición con las líneas
-# Estos valores pueden necesitar un ajuste manual dependiendo del gráfico
-peaks_df$density_offset <- peaks_df$density + c(0.15, 0.1, 0.15) # Ajuste específico para cada tipo de curva
+# Adjust the vertical position of labels to avoid overlap with the lines
+# These values may need manual tuning depending on the plot
+peaks_df$density_offset <- peaks_df$density + c(0.15, 0.1, 0.15) # Specific adjustment for each curve type
 
-# Crear el gráfico con ggplot2
+# Create the plot with ggplot2
 ggplot(df_long, aes(x = p, y = density, color = type, linetype = type)) +
-  geom_line(linewidth = 1) + # Ajustar el grosor de la línea
-  scale_color_manual(values = c("blue", "darkgreen", "red")) + # Colores personalizados
-  scale_linetype_manual(values = c("solid", "dashed", "solid")) + # Tipos de línea
-  labs(title = 'Distribución a Priori, Verosimilitud y A Posteriori', # Título del gráfico
-       x = 'Probabilidad de Éxito (p)', # Etiqueta del eje x
-       y = 'Densidad de Probabilidad / Escala') + # Etiqueta del eje y
-  theme_minimal() + # Tema minimalista
-  theme(legend.position = 'none') + # Ocultar la leyenda ya que las etiquetas son directas
-  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) + # Expandir el eje y para dar espacio a las etiquetas
+  geom_line(linewidth = 1) + # Adjust line thickness
+  scale_color_manual(values = c("blue", "darkgreen", "red")) + # Custom colors
+  scale_linetype_manual(values = c("solid", "dashed", "solid")) + # Line types
+  labs(title = 'Prior, Likelihood, and Posterior Distributions', # Plot title
+       x = 'Success Probability (p)', # X-axis label
+       y = 'Probability Density / Scale') + # Y-axis label
+  theme_minimal() + # Minimal theme
+  theme(legend.position = 'none') + # Hide the legend since labels are direct
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) + # Expand the y-axis to give space for labels
   geom_text(data = peaks_df, aes(x = p, y = density_offset, label = type, color = type),
-            size = 3.5, fontface = "bold", hjust = 0.5, vjust = 0) # Añadir etiquetas directas en los picos
+            size = 3.5, fontface = "bold", hjust = 0.5, vjust = 0) # Add direct labels at peaks
 ```
 
-### Interpretación del Gráfico
+### Chart Interpretation
 
--   **Distribución a Priori (Azul):** Representa nuestras creencias iniciales sobre la probabilidad de éxito antes de ver los datos. En este caso, al usar `Beta(1,1)` (uniforme), decimos que todas las probabilidades entre 0 y 1 son igualmente probables.
--   **Verosimilitud (Verde, Discontinua):** Muestra cuán probables son los datos observados bajo diferentes valores de la probabilidad `p`. Alcanza su pico en el *Máximo de Verosimilitud*, que es simplemente la proporción de éxitos en los datos simulados (`num_exitos / num_lanzamientos`).
--   **Distribución a Posteriori (Roja):** Es el resultado de combinar nuestra priori con la verosimilitud. Refleja nuestras creencias actualizadas sobre `p` *después* de haber observado los datos. Como puedes ver, la distribución a posteriori se ha desplazado hacia el valor de `p` que es más consistente con los datos observados (cerca del 0.7 en este ejemplo, que fue nuestro `p_true` al simular).
+-   **Prior Distribution (Blue):** Represents our initial beliefs about the success probability before seeing the data. In this case, using `Beta(1,1)` (uniform) means all probabilities between 0 and 1 are equally likely.
+-   **Likelihood (Green, Dashed):** Shows how likely the observed data are under different values of probability `p`. It peaks at the *Maximum Likelihood*, which is simply the proportion of successes in the simulated data (`num_exitos / num_lanzamientos`).
+-   **Posterior Distribution (Red):** Is the result of combining our prior with the likelihood. It reflects our updated beliefs about `p` *after* observing the data. As you can see, the posterior distribution shifts toward the value of `p` that is most consistent with the observed data (around 0.7 in this example, which was our `p_true` used for simulation).
 
-### 4. Evolución de la Distribución a Posteriori Observación a Observación
+### 4. Evolution of the Posterior Distribution Observation by Observation
 
-El siguiente desarollo muestra cómo nuestra distribución de probabilidad para `p` (la probabilidad de éxito) se actualiza con cada nueva observación. Comenzamos con la distribución a priori (uniforme en este caso) y, a medida que incorporamos cada lanzamiento de moneda, la curva a posteriori se ajusta para reflejar la nueva información.
+The following development shows how our probability distribution for `p` (the success probability) updates with each new observation. We start with the prior distribution (uniform in this case), and as we incorporate each coin toss, the posterior curve adjusts to reflect the new information.
 
 ```{r}
-cat(sprintf("\nDatos simulados:"))
+cat(sprintf("\nSimulated data:"))
 datos_simulados
 
-cat(sprintf("\nDatos simulados: %g lanzamientos. Éxitos (caras): %g, Fracasos (cruces): %g\n", num_lanzamientos, num_exitos, num_fracasos))
+cat(sprintf("\nSimulated data: %g tosses. Successes (heads): %g, Failures (tails): %g\n", num_lanzamientos, num_exitos, num_fracasos))
 
 ```
 
 ```{r}
-# Redefinir las variables necesarias para que la celda sea autónoma
+# Redefine the variables needed so this chunk is self-contained
 alfa_prior <- 1
 beta_prior <- 1
 p_values <- seq(0, 1, length.out = 100)
-p_true <- 0.7 # Esto se usó para simular, lo incluimos para consistencia
+p_true <- 0.7 # This was used for simulation; included here for consistency
 num_lanzamientos <- 10
 datos_simulados <- rbinom(num_lanzamientos, 1, p_true)
-# num_exitos y num_fracasos se calcularán dentro del bucle
+# num_exitos and num_fracasos will be calculated inside the loop
 datos_simulados
 ```
 
 ```{r}
-# Parámetros iniciales de la priori
+# Initial prior parameters
 current_alfa <- alfa_prior
 current_beta <- beta_prior
 
-# Crear un data frame para almacenar las distribuciones en cada paso
+# Create a data frame to store the distributions at each step
 df_evolution_steps <- data.frame()
 
-# Añadir la distribución a priori inicial
+# Add the initial prior distribution
 prior_pdf <- dbeta(p_values, current_alfa, current_beta)
-df_evolution_steps <- rbind(df_evolution_steps, data.frame(p = p_values, density = prior_pdf, step = "A Priori (Beta(1,1))"))
+df_evolution_steps <- rbind(df_evolution_steps, data.frame(p = p_values, density = prior_pdf, step = "Prior (Beta(1,1))"))
 
-# Iterar a través de cada observación (lanzamiento de moneda)
+# Iterate through each observation (coin toss)
 for (i in 1:num_lanzamientos) {
-  observation <- datos_simulados[i] # Obtener la observación actual
+  observation <- datos_simulados[i] # Get the current observation
 
-  # Actualizar los parámetros alfa y beta según la observación
-  if (observation == 1) { # Si es un éxito
+  # Update the alpha and beta parameters based on the observation
+  if (observation == 1) { # If it is a success
     current_alfa <- current_alfa + 1
-  } else { # Si es un fracaso
+  } else { # If it is a failure
     current_beta <- current_beta + 1
   }
 
-  # Calcular la densidad de la distribución a posteriori actual
+  # Calculate the density of the current posterior distribution
   posterior_pdf <- dbeta(p_values, current_alfa, current_beta)
 
-  # Añadir esta distribución al data frame de evolución
-  step_label <- paste0("Paso ", i, ": Posterior (Beta(", current_alfa, ",", current_beta, "))")
+  # Add this distribution to the evolution data frame
+  step_label <- paste0("Step ", i, ": Posterior (Beta(", current_alfa, ",", current_beta, "))")
   df_evolution_steps <- rbind(df_evolution_steps, data.frame(p = p_values, density = posterior_pdf, step = step_label))
 }
 
-# Convertir la columna 'step' a factor para asegurar el orden correcto en el gráfico
+# Convert the 'step' column to a factor to ensure correct ordering in the plot
 df_evolution_steps$step <- factor(df_evolution_steps$step, levels = unique(df_evolution_steps$step))
 
-cat(sprintf("\nDatos para el gráfico:"))
+cat(sprintf("\nData for the plot:"))
 head(df_evolution_steps)
 
-cat(sprintf("\nDatos para el gráfico:"))
+cat(sprintf("\nData for the plot:"))
 tail(df_evolution_steps)
 
 
 ```
 
 ```{r}
-# Aumentar el ancho del gráfico para evitar que esté "aplastado"
+# Increase the plot width to avoid a "squashed" appearance
 options(repr.plot.width = 12)
 
-# Crear el gráfico de la evolución con ggplot2
+# Create the evolution plot with ggplot2
 ggplot(df_evolution_steps, aes(x = p, y = density, color = step, group = step)) +
-  geom_line(linewidth = 0.8) + # Ajustar el grosor de la línea
-  labs(title = 'Evolución de la Distribución a Posteriori por Observación',
-       x = 'Probabilidad de Éxito (p)',
-       y = 'Densidad de Probabilidad',
-       color = 'Distribución') + # Título de la leyenda
+  geom_line(linewidth = 0.8) + # Adjust line thickness
+  labs(title = 'Evolution of the Posterior Distribution by Observation',
+       x = 'Success Probability (p)',
+       y = 'Probability Density',
+       color = 'Distribution') + # Legend title
   theme_minimal() +
-  theme(legend.position = 'right') + # Posición de la leyenda
-  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) + # Expandir el eje y
-  scale_color_viridis_d() # Usar una paleta de colores diversa para mostrar la evolución
+  theme(legend.position = 'right') + # Legend position
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) + # Expand the y-axis
+  scale_color_viridis_d() # Use a diverse color palette to show the evolution
 ```
 
-## La Función de Verosimilitud (Likelihood Function)
+## The Likelihood Function
 
-En Estadística, especialmente en la inferencia Bayesiana, la función de verosimilitud $L(\theta | \text{datos})$ mide cuán probable es observar los **datos** que ya hemos recolectado, **dado un valor específico del parámetro** $\theta$ (en nuestro caso, $p$, la probabilidad de éxito de la moneda).
+In statistics, especially in Bayesian inference, the likelihood function $L(\theta | \text{data})$ measures how probable it is to observe the **data** we have already collected, **given a specific value of the parameter** $\theta$ (in our case, $p$, the success probability of the coin).
 
-Es importante diferenciarla de la probabilidad a posteriori $P(\theta | \text{datos})$, que es lo que realmente nos interesa en la inferencia Bayesiana (cuán probable es el parámetro dado los datos).
+It is important to distinguish it from the posterior probability $P(\theta | \text{data})$, which is what we actually care about in Bayesian inference (how probable the parameter is given the data).
 
-**Puntos clave:**
+**Key points:**
 
-1.  **No es una probabilidad del parámetro:** La verosimilitud $L(p | \text{datos})$ no es una distribución de probabilidad sobre el parámetro $p$. Su integral sobre el rango de $p$ no tiene por qué sumar 1.
+1.  **It is not a probability of the parameter:** The likelihood $L(p | \text{data})$ is not a probability distribution over the parameter $p$. Its integral over the range of $p$ does not have to sum to 1.
 
-2.  **Mide la compatibilidad:** Nos dice qué tan bien un valor particular de $p$ (nuestra hipótesis sobre la verdadera probabilidad de la moneda) "explica" o es compatible con los datos que hemos observado. Un valor alto de verosimilitud para un cierto $p$ significa que los datos observados son más esperables si ese $p$ fuera el verdadero.
+2.  **It measures compatibility:** It tells us how well a particular value of $p$ (our hypothesis about the true coin probability) "explains" or is compatible with the data we have observed. A high likelihood value for a certain $p$ means the observed data are more expected if that $p$ were the true value.
 
-3.  **Para un parámetro fijo, los datos son aleatorios:** Se interpreta como una función de $p$, manteniendo los datos fijos. Es decir, preguntamos: "Si la probabilidad de éxito es $p=0.7$, ¿cuál es la probabilidad de haber obtenido 6 caras en 10 lanzamientos?" y luego repetimos la pregunta para $p=0.5$, $p=0.8$, etc.
+3.  **For a fixed parameter, the data are random:** It is interpreted as a function of $p$, holding the data fixed. In other words, we ask: "If the success probability is $p=0.7$, what is the probability of observing 6 heads in 10 tosses?" and then repeat the question for $p=0.5$, $p=0.8$, etc.
 
-4.  **En el ejemplo de la moneda:**
-    *   Si observamos $k$ éxitos en $n$ lanzamientos (como 6 caras en 10 lanzamientos).
-    *   La verosimilitud binomial (apropiada para lanzamientos de moneda) está dada por: $L(p | \text{datos}) \propto p^k (1-p)^{n-k}$.
-    *   El pico de esta función indica el valor de $p$ que hace que los datos observados sean **más verosímiles** (el estimador de Máxima Verosimilitud, que en este caso es simplemente la proporción de éxitos, $k/n$).
+4.  **In the coin example:**
+    *   If we observe $k$ successes in $n$ tosses (such as 6 heads in 10 tosses).
+    *   The binomial likelihood (appropriate for coin tosses) is given by: $L(p | \text{data}) \propto p^k (1-p)^{n-k}$.
+    *   The peak of this function indicates the value of $p$ that makes the observed data **most likely** (the Maximum Likelihood estimator, which in this case is simply the proportion of successes, $k/n$).
 
-5.  **Rol en la inferencia Bayesiana:** La verosimilitud es el puente entre nuestros datos y nuestras creencias previas (la distribución a priori). Se multiplica por la priori para obtener la distribución a posteriori, como se ve en la fórmula del Teorema de Bayes:
-    $$ P(p | \text{datos}) \propto P(\text{datos} | p) \times P(p)$$
+5.  **Role in Bayesian inference:** The likelihood is the bridge between our data and our prior beliefs (the prior distribution). It is multiplied by the prior to obtain the posterior distribution, as shown in Bayes' theorem:
+    $$ P(p | \text{data}) \propto P(\text{data} | p) \times P(p)$$
     
-    $$\text{Posteriori} \propto \text{Verosimilitud} \times \text{Priori} $$
+    $$\text{Posterior} \propto \text{Likelihood} \times \text{Prior} $$
 
-## Ejemplo de la distribución Normal
+## Normal Distribution Example
 
-### Estimación de la Media Normal
+### Normal Mean Estimation
 
-Definir la distribución a priori para la media (mu)
-Supondremos una distribución Normal para nuestra creencia inicial sobre mu.
+Define the prior distribution for the mean (mu).
+We will assume a Normal distribution for our initial belief about mu.
 
-Tenemos una 'media de la priori' y una 'desviación estándar de la priori' para mu.
+We have a 'prior mean' and a 'prior standard deviation' for mu.
 
-### 1. Distribución apriori
+### 1. Prior distribution
 
 ```{r}
-mu_prior_mean <- 0   # Nuestra creencia inicial para la media es 0
-mu_prior_sd <- 1     # Nuestra incertidumbre inicial es una desviación estándar de 1
+mu_prior_mean <- 0   # Our initial belief for the mean is 0
+mu_prior_sd <- 1     # Our initial uncertainty is a standard deviation of 1
 
-# La desviación estándar de la población (sigma) se asume conocida para este ejemplo.
-sigma_data_known <- 2 # Desviación estándar conocida de los datos (no del parámetro mu)
+# The population standard deviation (sigma) is assumed known for this example.
+sigma_data_known <- 2 # Known standard deviation of the data (not the parameter mu)
 
-cat(sprintf("A priori para mu: Normal(media=%.2f, sd=%.2f)\n", mu_prior_mean, mu_prior_sd))
-cat(sprintf("Desviación estándar de los datos (conocida): %.2f\n", sigma_data_known))
+cat(sprintf("Prior for mu: Normal(mean=%.2f, sd=%.2f)\n", mu_prior_mean, mu_prior_sd))
+cat(sprintf("Known data standard deviation: %.2f\n", sigma_data_known))
 
-# Calcular la precisión (inverso de la varianza) para la priori
+# Calculate the precision (inverse variance) for the prior
 precision_prior <- 1 / (mu_prior_sd^2)
 
-# Rango de posibles valores para la media 'mu'
+# Range of possible values for the mean 'mu'
 mu_values <- seq(-5, 5, length.out = 200)
 
-# Calcular las densidades de la distribución a priori
+# Calculate the densities of the prior distribution
 prior_pdf_values_normal <- dnorm(mu_values, mean = mu_prior_mean, sd = mu_prior_sd)
 
-# Crear un data frame para ggplot2
+# Create a data frame for ggplot2
 df_prior_plot_normal <- data.frame(
   mu = mu_values,
   prior_density = prior_pdf_values_normal
 )
 
-cat("\nNombres de columna de df_prior_plot_normal:\n")
+cat("\nColumn names of df_prior_plot_normal:\n")
 print(colnames(df_prior_plot_normal))
 
-# Crear el gráfico de la distribución a priori
+# Create the prior distribution plot
 print(ggplot(df_prior_plot_normal, aes(x = mu, y = prior_density)) +
   geom_line(color = 'blue', linewidth = 1) +
-  labs(title = 'Distribución a Priori para la Media (mu)',
-       x = 'Media (mu)',
-       y = 'Densidad de Probabilidad') +
+  labs(title = 'Prior Distribution for the Mean (mu)',
+       x = 'Mean (mu)',
+       y = 'Probability Density') +
   theme_minimal())
 ```
 
-### 2. Datos
+### 2. Data
 
-Supongamos una 'verdadera' media de la población
+Suppose a 'true' population mean.
 ```{r}
 mu_true <- 1.5
 num_observaciones <- 15
 
-# Simular observaciones de una distribución normal
+# Simulate observations from a normal distribution
 set.seed(456)
 observaciones_simuladas <- rnorm(num_observaciones, mean = mu_true, sd = sigma_data_known)
 
-cat(sprintf("\nDatos simulados: %g observaciones de una Normal(media=%.2f, sd=%.2f)\n", num_observaciones, mu_true, sigma_data_known))
-cat("Primeras 5 observaciones: ", head(observaciones_simuladas, 5), "\n")
+cat(sprintf("\nSimulated data: %g observations from a Normal(mean=%.2f, sd=%.2f)\n", num_observaciones, mu_true, sigma_data_known))
+cat("First 5 observations: ", head(observaciones_simuladas, 5), "\n")
 
-# Calcular la suma de los datos y la media muestral
+# Calculate the sum and sample mean of the data
 sum_observaciones <- sum(observaciones_simuladas)
 mean_observaciones <- mean(observaciones_simuladas)
 
-cat(sprintf("Media muestral de los datos: %.2f\n", mean_observaciones))
+cat(sprintf("Sample mean of the data: %.2f\n", mean_observaciones))
 ```
 
 ```{r}
 hist(observaciones_simuladas)
 ```
 
-### 3. Distribución a posteriori
+### 3. Posterior distribution
 
-Para una priori Normal y una verosimilitud Normal (con sigma conocido), la posteriori también es Normal.
+For a Normal prior and a Normal likelihood (with known sigma), the posterior is also Normal.
 
 ```{r}
-# Parámetros de la posterior (para el parámetro mu):
-# Precisiones: 1/varianza
+# Posterior parameters (for parameter mu):
+# Precisions: 1/variance
 precision_posterior <- precision_prior + (num_observaciones / (sigma_data_known^2))
 
 mu_posterior_mean <- ((mu_prior_mean * precision_prior) + (sum_observaciones / (sigma_data_known^2))) / precision_posterior
 mu_posterior_sd <- sqrt(1 / precision_posterior)
 
-cat(sprintf("\nA posteriori para mu: Normal(media=%.2f, sd=%.2f)\n", mu_posterior_mean, mu_posterior_sd))
+cat(sprintf("\nPosterior for mu: Normal(mean=%.2f, sd=%.2f)\n", mu_posterior_mean, mu_posterior_sd))
 ```
 
-### Visualización
+### Visualization
 
 ```{r}
-# Rango de posibles valores para la media 'mu'
+# Range of possible values for the mean 'mu'
 mu_values <- seq(min(c(mu_prior_mean - 3*mu_prior_sd, mu_true - 3*sigma_data_known/sqrt(num_observaciones), mu_posterior_mean - 3*mu_posterior_sd)),
                  max(c(mu_prior_mean + 3*mu_prior_sd, mu_true + 3*sigma_data_known/sqrt(num_observaciones), mu_posterior_mean + 3*mu_posterior_sd)),
                  length.out = 200)
 
-# Calcular las densidades de las distribuciones
+# Calculate the densities of the distributions
 prior_pdf_values_normal <- dnorm(mu_values, mean = mu_prior_mean, sd = mu_prior_sd)
 
-# Calcular la verosimilitud (no normalizada) para el parámetro mu
-# La verosimilitud para mu dada las observaciones x_i es proporcional a exp(-sum((x_i - mu)^2) / (2*sigma_data_known^2))
-# Para simplificar la visualización y evitar problemas numéricos con productos,
-# podemos usar la forma que se centra en la media muestral.
-# La verosimilitud es proporcional a N(mu_sample, sigma_data_known^2 / n)
+# Calculate the likelihood (unnormalized) for the parameter mu
+# The likelihood for mu given observations x_i is proportional to exp(-sum((x_i - mu)^2) / (2*sigma_data_known^2))
+# To simplify the visualization and avoid numerical issues with products,
+# we can use a form centered on the sample mean.
+# The likelihood is proportional to N(mu_sample, sigma_data_known^2 / n)
 
 # Calculate the term sum((x_i - mu)^2) for each mu_value
 likelihood_term <- sapply(mu_values, function(m) {
@@ -392,14 +391,14 @@ likelihood_term <- sapply(mu_values, function(m) {
 })
 likelihood_values_normal <- exp(likelihood_term)
 
-# Escalar la verosimilitud para que sea comparable con las PDFs (que integran a 1)
-# Normalizaremos para que el pico sea similar al de la priori (o posteriori)
+# Scale the likelihood to make it comparable with the PDFs (which integrate to 1)
+# We normalize so that the peak is similar to that of the prior (or posterior)
 likelihood_scaled_normal <- likelihood_values_normal / max(likelihood_values_normal) * max(prior_pdf_values_normal)
 
-# Calcular la densidad de la distribución a posteriori
+# Calculate the density of the posterior distribution
 posterior_pdf_values_normal <- dnorm(mu_values, mean = mu_posterior_mean, sd = mu_posterior_sd)
 
-# Crear un data frame para ggplot2
+# Create a data frame for ggplot2
 df_plot_normal <- data.frame(
   mu = mu_values,
   prior = prior_pdf_values_normal,
@@ -407,41 +406,41 @@ df_plot_normal <- data.frame(
   posterior = posterior_pdf_values_normal
 )
 
-# Reestructurar el data frame para ggplot2 (formato largo)
+# Reshape the data frame for ggplot2 (long format)
 df_long_normal <- df_plot_normal %>%
   tidyr::pivot_longer(cols = -mu, names_to = "type", values_to = "density") %>%
   mutate(type = factor(type, levels = c("prior", "likelihood", "posterior"),
-                       labels = c("A Priori", "Verosimilitud", "A Posteriori")))
+                       labels = c("Prior", "Likelihood", "Posterior")))
 
-cat("\nNombres de columna de df_long_normal (después del pivot):\n")
+cat("\nColumn names of df_long_normal (after pivot):\n")
 print(colnames(df_long_normal))
 
 ```
 
-Datos para el gráfico:
+Data for the plot:
 
 ```{r}
 head(df_long_normal)
 ```
 
 ```{r}
-# Preparar un dataframe para las etiquetas de texto en el gráfico
+# Prepare a data frame for text labels in the plot
 peaks_df_normal <- df_long_normal %>%
   group_by(type) %>%
   filter(density == max(density)) %>%
   slice(1) %>%
   ungroup()
 
-peaks_df_normal$density_offset <- peaks_df_normal$density + c(0.02, 0.02, 0.02) # Ajuste específico
+peaks_df_normal$density_offset <- peaks_df_normal$density + c(0.02, 0.02, 0.02) # Specific adjustment
 
-# Crear el gráfico con ggplot2
+# Create the plot with ggplot2
 print(ggplot(df_long_normal, aes(x = mu, y = density, color = type, linetype = type)) +
   geom_line(linewidth = 1) +
   scale_color_manual(values = c("blue", "darkgreen", "red")) +
   scale_linetype_manual(values = c("solid", "dashed", "solid")) +
-  labs(title = 'Distribución a Priori, Verosimilitud y A Posteriori para la Media (mu)',
-       x = 'Media (mu)',
-       y = 'Densidad de Probabilidad / Escala') +
+  labs(title = 'Prior, Likelihood, and Posterior Distributions for the Mean (mu)',
+       x = 'Mean (mu)',
+       y = 'Probability Density / Scale') +
   theme_minimal() +
   theme(legend.position = 'none') +
   scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
@@ -449,56 +448,56 @@ print(ggplot(df_long_normal, aes(x = mu, y = density, color = type, linetype = t
             size = 3.5, fontface = "bold", hjust = 0.5, vjust = 0))
 ```
 
-### 4. Evolución de la Distribución a Posteriori Observación a Observación
+### 4. Evolution of the Posterior Distribution Observation by Observation
 
 ```{r}
-# Parámetros iniciales de la priori
+# Initial prior parameters
 current_mu_mean <- mu_prior_mean
 current_precision <- precision_prior
 
-# Crear un data frame para almacenar las distribuciones en cada paso
+# Create a data frame to store the distributions at each step
 df_evolution_steps_normal <- data.frame()
 
-# Añadir la distribución a priori inicial
+# Add the initial prior distribution
 prior_pdf_normal <- dnorm(mu_values, mean = current_mu_mean, sd = sqrt(1/current_precision))
-df_evolution_steps_normal <- rbind(df_evolution_steps_normal, data.frame(mu = mu_values, density = prior_pdf_normal, step = "A Priori"))
+df_evolution_steps_normal <- rbind(df_evolution_steps_normal, data.frame(mu = mu_values, density = prior_pdf_normal, step = "Prior"))
 
-# Iterar a través de cada observación
+# Iterate through each observation
 for (i in 1:num_observaciones) {
-  observation <- observaciones_simuladas[i] # Obtener la observación actual
+  observation <- observaciones_simuladas[i] # Get the current observation
 
-  # Actualizar los parámetros de la posterior con la nueva observación
-  # Para cada observación, la precisión de la verosimilitud es 1/sigma_data_known^2
+  # Update the posterior parameters with the new observation
+  # For each observation, the likelihood precision is 1/sigma_data_known^2
   current_precision <- current_precision + (1 / (sigma_data_known^2))
   current_mu_mean <- ((current_mu_mean * (current_precision - (1 / (sigma_data_known^2)))) + (observation / (sigma_data_known^2))) / current_precision
 
-  # Calcular la densidad de la distribución a posteriori actual
+  # Calculate the density of the current posterior distribution
   posterior_pdf_normal <- dnorm(mu_values, mean = current_mu_mean, sd = sqrt(1/current_precision))
 
-  # Añadir esta distribución al data frame de evolución
-  step_label <- paste0("Paso ", i, ": Posterior (N(", round(current_mu_mean,2), ", ", round(sqrt(1/current_precision),2), "))")
+  # Add this distribution to the evolution data frame
+  step_label <- paste0("Step ", i, ": Posterior (N(", round(current_mu_mean,2), ", ", round(sqrt(1/current_precision),2), "))")
   df_evolution_steps_normal <- rbind(df_evolution_steps_normal, data.frame(mu = mu_values, density = posterior_pdf_normal, step = step_label))
 }
 
-# Convertir la columna 'step' a factor para asegurar el orden correcto en el gráfico
+# Convert the 'step' column to a factor to ensure correct ordering in the plot
 df_evolution_steps_normal$step <- factor(df_evolution_steps_normal$step, levels = unique(df_evolution_steps_normal$step))
 
-cat("\nNombres de columna de df_evolution_steps_normal:\n")
+cat("\nColumn names of df_evolution_steps_normal:\n")
 print(colnames(df_evolution_steps_normal))
 
-# Aumentar el ancho del gráfico para evitar que esté "aplastado"
+# Increase the plot width to avoid a "squashed" appearance
 options(repr.plot.width = 12)
 
-# Crear el gráfico de la evolución con ggplot2
+# Create the evolution plot with ggplot2
 print(ggplot(df_evolution_steps_normal, aes(x = mu, y = density, color = step, group = step)) +
   geom_line(linewidth = 0.8) +
-  labs(title = 'Evolución de la Distribución a Posteriori por Observación (Media Normal)',
-       x = 'Media (mu)',
-       y = 'Densidad de Probabilidad',
-       color = 'Distribución') +
+  labs(title = 'Evolution of the Posterior Distribution by Observation (Normal Mean)',
+       x = 'Mean (mu)',
+       y = 'Probability Density',
+       color = 'Distribution') +
   theme_minimal() +
   theme(legend.position = 'right') +
   scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
-  scale_color_viridis_d()) # Usar una paleta de colores diversa para mostrar la evolución
+  scale_color_viridis_d()) # Use a diverse color palette to show the evolution
 
 ```

@@ -1,7 +1,17 @@
 ---
 title: "Churn Statistical Analysis"
-date: "`r Sys.Date()`"
-output: html_document
+author: "Ruben Cabrera"
+date: "2026-04"
+output: 
+  github_document: default
+  html_document: default
+  pdf_document:
+    latex_engine: xelatex
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_format = "all") })
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
 ```{r setup, include=FALSE}

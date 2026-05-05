@@ -24,8 +24,8 @@ The churn analysis uses **two separate data files** that are joined by customer 
                     │                        │                        │
                     ▼                        ▼                        ▼
         ┌───────────────────┐  ┌─────────────────────┐  ┌───────────────────────┐
-        │   Billing System   │  │   Customer Database  │  │   Call Detail Records  │
-        │   (CSV Export)     │  │   (CSV Export)       │  │   (Excel .xls Export)  │
+        │   Billing System  │  │   Customer Database │  │   Call Detail Records │
+        │   (CSV Export)    │  │   (CSV Export)      │  │   (Excel .xls Export) │
         └─────────┬─────────┘  └──────────┬──────────┘  └───────────┬───────────┘
                   │                       │                        │
                   │                       │                        │
@@ -34,17 +34,17 @@ The churn analysis uses **two separate data files** that are joined by customer 
         │  ContractData.csv │  │ (demographics info  │  │    CallsData.xls      │
         │                   │  │  is embedded in the │  │                       │
         │  • Account info   │  │  ContractData file) │  │  • Call minutes/day   │
-        │  • Plan details   │  └─────────────────────┘  │  • Call charges        │
-        │  • Churn label    │                           │  • Customer service    │
+        │  • Plan details   │  └─────────────────────┘  │  • Call charges       │
+        │  • Churn label    │                           │  • Customer service   │
         └─────────┬─────────┘                           └───────────┬───────────┘
                   │                                                 │
                   └────────────────────┬────────────────────────────┘
                                        │
                                        ▼
                           ┌─────────────────────────┐
-                          │     Merged Dataset       │
-                          │    (inner_join on         │
-                          │   Phone + Area.Code)     │
+                          │     Merged Dataset      │
+                          │    (inner_join on       │
+                          │   Phone + Area.Code)    │
                           └─────────────────────────┘
 ```
 

@@ -696,16 +696,14 @@ CRUDOS       (scripts .R)              (R Markdown / .md)            (Shiny)
 
 Cada perfil dentro de la organización interactúa con el ecosistema BI en distintos niveles:
 
-```
-ROL                  ACCIÓN PRINCIPAL                          HERRAMIENTAS QUE USA
----                  ----------------                          -------------------
-Analista de datos    Escribe scripts .R, crea reportes .Rmd    RStudio, Git, renv
-Científico de datos  Desarrolla modelos predictivos            R, ggplot2, caret, tidymodels
-Ingeniero de datos   Automatiza extracciones y CI/CD           DBI, GitHub Actions, renv
-Analista de negocio  Ejecuta simuladores, explora escenarios   Shiny (como usuario)
-Director / Gerente   Consulta KPIs en dashboards en vivo       Shiny (navegador web)
-Revisor / Auditor    Valida PRs, revisa historial de cambios   GitHub (code review)
-```
+| Rol                           | Acción principal                              | Herramientas que usa                          |
+|-------------------------------|-----------------------------------------------|-----------------------------------------------|
+| **Analista de datos**         | Escribe scripts `.R`, crea reportes `.Rmd`    | RStudio, Git, renv                            |
+| **Científico de datos**       | Desarrolla modelos predictivos                | R, ggplot2, caret, tidymodels                 |
+| **Ingeniero de datos**        | Automatiza extracciones y CI/CD               | DBI, GitHub Actions, renv                     |
+| **Analista de negocio**       | Ejecuta simuladores, explora escenarios       | Shiny (como usuario)                          |
+| **Director / Gerente**        | Consulta KPIs en dashboards en vivo           | Shiny (navegador web)                         |
+| **Revisor / Auditor**         | Valida PRs, revisa historial de cambios       | GitHub (code review)                          |
 
 ### Ciclo de vida completo
 

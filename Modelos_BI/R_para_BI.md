@@ -242,26 +242,31 @@ En toda solución de Business Intelligence, el análisis de datos es solo una pa
 
 Esto transforma un script de R tradicional en un **reporte BI completo y reproducible**. Cada vez que se renderiza el `.Rmd`, se actualizan todos los resultados con los datos más recientes, eliminando el trabajo manual de copiar y pegar números o gráficos en presentaciones o correos.
 
-```markdown
+A continuación se muestra la **estructura típica de un archivo `.Rmd`** desglosada en sus tres componentes fundamentales:
+
+#### 1. Encabezado YAML — metadatos del documento
+
+El bloque YAML (delimitado por `---`) define el título, autor, fecha y formato de salida:
+
+```yaml
 ---
 title: "Informe mensual de ventas"
 author: "Equipo BI"
 date: "`r Sys.Date()`"
 output: html_document
 ---
+```
 
-## Resumen ejecutivo
+#### 2. Bloques de código R ejecutable
 
-En `r month.name[month(Sys.Date()) - 1]` se procesaron
-**`r format(total_transacciones, big.mark = ",")`** transacciones,
-con un ingreso total de **`r scales::dollar(ingreso_total)`**.
+El código R se escribe dentro de bloques cercados por ` ```{r} ` y ` ``` `. Al renderizar, estos bloques se ejecutan y sus resultados (tablas, gráficos, valores) se insertan en el documento final:
 
+````markdown
 ```{r echo=FALSE, message=FALSE}
 library(dplyr)
 library(ggplot2)
 
 ventas <- read.csv("data/ventas_mensuales.csv")
-
 total_transacciones <- nrow(ventas)
 ingreso_total <- sum(ventas$monto)
 
@@ -273,9 +278,21 @@ ventas %>%
   labs(title = "Ventas por región") +
   theme_minimal()
 ```
+````
 
-Los resultados indican que la región con mayor crecimiento fue...
+En este ejemplo, el código carga los datos, calcula dos métricas clave y genera un gráfico de barras por región. Las opciones `echo=FALSE` y `message=FALSE` ocultan el código fuente y los mensajes en el reporte final.
+
+#### 3. Texto narrativo con valores calculados en línea
+
+R Markdown permite insertar el resultado de cualquier expresión R directamente en el texto usando `` `r código_r` ``:
+
+```markdown
+En `r month.name[month(Sys.Date()) - 1]` se procesaron
+**`r format(total_transacciones, big.mark = ",")`** transacciones,
+con un ingreso total de **`r scales::dollar(ingreso_total)`**.
 ```
+
+Al renderizar el informe, los fragmentos `` `r ...` `` se evalúan y se reemplazan por los valores reales (por ejemplo: *"En mayo se procesaron 12.483 transacciones, con un ingreso total de $ 1.234.567"*), generando un reporte actualizado automáticamente sin copiar y pegar manualmente.
 
 ### 2. Diferencias y usos de `.Rmd` y `.md` en el proceso BI
 
@@ -349,7 +366,33 @@ jobs:
 
 Una vez configurado, el reporte estará disponible en `https://<organizacion>.github.io/<repositorio>/` y cualquier persona en la organización puede acceder a la última versión del análisis sin necesidad de instalar R ni ejecutar código.
 
-### 5. Buenas prácticas de documentación BI con R Markdown
+### 5. Gestión de entornos reproducibles con `renv`
+
+Un reporte R Markdown no es completamente reproducible si solo depende del código fuente. Las versiones de los paquetes de R instalados en la máquina del analista pueden diferir de las del servidor de CI o de las de otro miembro del equipo, provocando resultados inconsistentes o errores inesperados.
+
+**`renv`** resuelve este problema creando un entorno aislado por proyecto que registra las versiones exactas de cada paquete en un archivo `renv.lock`. Este archivo se incluye en el repositorio de Git y permite que cualquier persona (o proceso automatizado) pueda restaurar el mismo entorno con un solo comando.
+
+Para integrar `renv` en un proyecto BI con R Markdown:
+
+1. **Inicializar `renv`** en la raíz del proyecto con `renv::init()`. Esto crea el archivo `renv.lock` y un directorio `renv/` con el código del paquete.
+2. **Desarrollar el análisis** como de costumbre: instalar paquetes con `install.packages()`. `renv` detecta automáticamente los nuevos paquetes y actualiza `renv.lock` con `renv::snapshot()`.
+3. **Confirmar `renv.lock` en Git** junto con el resto del código (`renv.lock` es un archivo de texto plano ideal para control de versiones).
+4. **Restaurar el entorno** en cualquier otro equipo o en la CI con `renv::restore()`, que descarga e instala las versiones exactas registradas en `renv.lock`.
+
+Ejemplo de workflow con `renv` en GitHub Actions:
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: r-lib/actions/setup-r@v2
+  - uses: r-lib/actions/setup-renv@v2    # Ejecuta renv::restore() automáticamente
+  - name: Renderizar reporte
+    run: Rscript -e 'rmarkdown::render("reports/informe_ventas.Rmd")'
+```
+
+Gracias a `renv`, el reporte generado localmente, el que se genera en la CI y el que obtenga cualquier otro analista serán **idénticos en resultados**, eliminando de raíz los problemas de *"en mi máquina funciona"*.
+
+### 6. Buenas prácticas de documentación BI con R Markdown
 
 | Práctica                          | Descripción                                                                |
 |-----------------------------------|----------------------------------------------------------------------------|
@@ -360,8 +403,9 @@ Una vez configurado, el reporte estará disponible en `https://<organizacion>.gi
 | **Versionar los `.Rmd`**          | Almacenarlos en el repositorio Git junto con los `.R` para mantener la trazabilidad. |
 | **Generar siempre una versión `.md`** | Resumir los hallazgos clave en un `.md` visible directamente en GitHub para consulta rápida. |
 | **Automatizar la renderización**  | Usar GitHub Actions para regenerar reportes periódicamente o ante cada cambio. |
+| **Usar `renv` para entornos reproducibles** | Incluir `renv.lock` en el repositorio para que todo el equipo y la CI de GitHub Actions restauren el mismo entorno con `renv::restore()`, eliminando incompatibilidades entre versiones de paquetes. |
 
-### 6. Impacto en la organización
+### 7. Impacto en la organización
 
 Una estrategia de documentación bien implementada con R Markdown y Markdown produce beneficios concretos:
 
@@ -374,6 +418,345 @@ En resumen, **documentar el trabajo BI en `.Rmd` y `.md` no es un paso opcional*
 
 ---
 
+## Shiny: aplicaciones interactivas y dashboards para BI
+
+### 1. ¿Qué es Shiny y por qué es relevante para BI?
+
+**Shiny** es un paquete de R que permite construir **aplicaciones web interactivas** directamente desde R, sin necesidad de conocimientos de HTML, CSS o JavaScript. Para una solución de Business Intelligence, Shiny cubre un vacío crítico que R Markdown no puede llenar: la **interactividad en tiempo real**.
+
+Mientras que R Markdown genera reportes estáticos (aunque actualizables), Shiny permite que el usuario final —analista, gerente o director— **interactúe con los datos y modelos** en vivo: ajuste parámetros, filtre fechas, explore escenarios y vea los resultados al instante, sin esperar a que un reporte se renderice de nuevo.
+
+Shiny se integra de forma natural con el resto del ecosistema R: los mismos paquetes de manipulación (`dplyr`), visualización (`ggplot2`, `plotly`) y modelado se usan dentro de la aplicación, lo que evita la duplicación de lógica entre el análisis exploratorio y el dashboard final.
+
+### 2. Shiny en el trabajo operativo: simulaciones estadísticas interactivas
+
+En el día a día operativo, el equipo de datos necesita ejecutar análisis que respondan preguntas condicionales del tipo *"¿qué pasa si...?"*. Con Shiny, estas simulaciones se convierten en herramientas interactivas que cualquier miembro del equipo puede utilizar sin escribir código.
+
+**Ejemplo: Simulador de riesgo crediticio**
+
+Un analista de riesgos quiere evaluar cómo cambiaría la tasa de incobrabilidad si se modifican los umbrales de aprobación de créditos. Con Shiny puede construir una aplicación que:
+
+```r
+# UI: controles para los parámetros de simulación
+ui <- fluidPage(
+  titlePanel("Simulador de riesgo crediticio"),
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("ingreso_min", "Ingreso mínimo (USD)",
+                  min = 500, max = 5000, value = 1500, step = 100),
+      sliderInput("edad_min", "Edad mínima",
+                  min = 18, max = 70, value = 25),
+      numericInput("max_deuda", "Deuda máxima permitida (USD)",
+                   value = 10000, min = 0, step = 1000),
+      actionButton("simular", "Ejecutar simulación")
+    ),
+    mainPanel(
+      h3("Resultados de la simulación"),
+      verbatimTextOutput("resumen"),
+      plotOutput("distribucion")
+    )
+  )
+)
+
+# Server: lógica de simulación reactiva
+server <- function(input, output) {
+  observeEvent(input$simular, {
+    candidatos <- read.csv("data/solicitudes.csv")
+    
+    filtrados <- candidatos %>%
+      filter(ingresos >= input$ingreso_min,
+             edad     >= input$edad_min,
+             deuda_total <= input$max_deuda)
+    
+    prob_incobrabilidad <- mean(filtrados$default_historico)
+    total_aprobados     <- nrow(filtrados)
+    monto_total         <- sum(filtrados$monto_solicitado)
+    
+    output$resumen <- renderPrint({
+      cat("Resultados de la simulación:\n")
+      cat("  Solicitudes que cumplen criterios:", total_aprobados, "\n")
+      cat("  Monto total comprometido: USD", format(monto_total, big.mark = ","), "\n")
+      cat("  Probabilidad estimada de incobrabilidad:",
+          scales::percent(prob_incobrabilidad), "\n")
+    })
+    
+    output$distribucion <- renderPlot({
+      ggplot(filtrados, aes(x = monto_solicitado)) +
+        geom_histogram(fill = "steelblue", bins = 30) +
+        labs(title = "Distribución de montos solicitados (aprobados)",
+             x = "Monto (USD)", y = "Frecuencia") +
+        theme_minimal()
+    })
+  })
+}
+
+shinyApp(ui, server)
+```
+
+Esta aplicación permite al equipo operativo **ajustar parámetros en tiempo real** y ver al instante cómo cambian las métricas de riesgo, sin depender del analista que escribió el modelo para cada consulta.
+
+Otros ejemplos operativos típicos con Shiny:
+
+- **Simulador de inventarios**: ajustar niveles de stock de seguridad y ver el impacto en rotación y quiebres de stock.
+- **Asignación de presupuesto publicitario**: modificar la distribución del gasto entre canales (digital, TV, radio) y observar el retorno estimado.
+- **Segmentación dinámica de clientes**: cambiar los umbrales de RFM (recencia, frecuencia, monto) y ver cómo se reclasifican los clientes.
+
+### 3. Shiny en el trabajo estratégico: tableros de control y dashboards
+
+Para la toma de decisiones estratégica, los dashboards de Shiny proporcionan una **visión consolidada y actualizada** de los indicadores clave de negocio (KPIs), accesible desde cualquier navegador sin instalar software.
+
+**Ejemplo: Dashboard ejecutivo de ventas**
+
+Un director comercial necesita monitorear diariamente la evolución de las ventas, la rentabilidad por región y el cumplimiento de cuotas. Con Shiny y `flexdashboard` se puede construir un tablero ejecutivo:
+
+````markdown
+---
+title: "Dashboard ejecutivo de ventas"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    theme: cosmo
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(shiny)
+
+ventas <- read.csv("data/ventas_diarias.csv")
+```
+
+Fila 1
+-----------------------------------------------------------------------
+
+### KPI - Ventas acumuladas
+
+```{r}
+valueBox(
+  value = scales::dollar(sum(ventas$monto), prefix = "$"),
+  caption = "Ventas acumuladas del mes",
+  icon = "fa-chart-line"
+)
+```
+
+### KPI - Margen promedio
+
+```{r}
+margen <- mean(ventas$margen, na.rm = TRUE)
+valueBox(
+  value = scales::percent(margen),
+  caption = "Margen bruto promedio",
+  icon = "fa-percentage"
+)
+```
+
+### KPI - Cumplimiento de cuota
+
+```{r}
+cuota <- sum(ventas$monto) / 500000   # Cuota mensual: USD 500K
+valueBox(
+  value = scales::percent(cuota),
+  caption = "Cumplimiento de cuota mensual",
+  icon = "fa-bullseye",
+  color = ifelse(cuota >= 1, "success", "warning")
+)
+```
+
+Fila 2
+-----------------------------------------------------------------------
+
+### Ventas por región
+
+```{r}
+ventas %>%
+  group_by(region) %>%
+  summarise(Total = sum(monto)) %>%
+  plot_ly(x = ~region, y = ~Total, type = "bar", color = ~region) %>%
+  layout(title = "Ventas por región", xaxis = list(title = ""),
+         yaxis = list(title = "Total (USD)"))
+```
+
+### Evolución diaria
+
+```{r}
+ventas %>%
+  group_by(fecha) %>%
+  summarise(Diario = sum(monto)) %>%
+  plot_ly(x = ~fecha, y = ~Diario, type = "scatter", mode = "lines+markers") %>%
+  layout(title = "Ventas diarias del mes",
+         xaxis = list(title = ""), yaxis = list(title = "USD"))
+```
+````
+
+Este dashboard se despliega en un servidor (Shiny Server, Posit Connect o incluso gratis en [shinyapps.io](https://www.shinyapps.io)) y el equipo directivo accede a él mediante una URL, con datos actualizados cada vez que se recarga la página.
+
+### 4. Shiny en el ciclo BI: integración con el ecosistema existente
+
+Shiny no reemplaza a R Markdown ni a los scripts `.R`, sino que los complementa dentro del mismo flujo de trabajo BI:
+
+```
++-------------------+    +-------------------+    +-------------------+
+|  Análisis en .R   | -> |  Reporte en .Rmd  | -> |  Dashboard Shiny  |
+|  (exploración,    |    |  (documentación,  |    |  (interactividad, |
+|   modelos)        |    |  hallazgos fijos) |    |   simulaciones,   |
+|                   |    |                   |    |   monitoreo)      |
++-------------------+    +-------------------+    +-------------------+
+        |                         |                         |
+        v                         v                         v
+    Scripts reutilizables    Reportes ejecutivos        Aplicaciones
+    (control de versiones)   (HTML/PDF automáticos)     interactivas en vivo
+```
+
+**Buenas prácticas para integrar Shiny en el proceso BI:**
+
+| Práctica                          | Descripción                                                                |
+|-----------------------------------|----------------------------------------------------------------------------|
+| **Reutilizar la lógica `.R`**     | Extraer las funciones de manipulación y modelado en scripts `.R` separados; tanto `.Rmd` como Shiny los cargan con `source()`. |
+| **Separar UI y server**           | Mantener `ui.R` y `server.R` en archivos distintos para facilitar el mantenimiento y las revisión en PR. |
+| **Usar `renv` también en Shiny**  | Incluir el `renv.lock` para que el servidor de despliegue tenga las mismas versiones de paquetes que el entorno de desarrollo. |
+| **Control de versiones**          | Versionar el código de la aplicación Shiny en el mismo repositorio Git que los análisis y reportes. |
+| **Automatizar el despliegue**     | Usar GitHub Actions para desplegar la aplicación en Posit Connect o Shiny Server tras cada push a la rama principal. |
+| **Diseñar para el usuario final** | Priorizar la usabilidad: controles claros, tiempos de respuesta rápidos y visualizaciones autoexplicativas. |
+
+### 5. Impacto de Shiny en la organización
+
+La incorporación de Shiny como capa interactiva de la solución BI transforma la relación del equipo de datos con el resto de la organización:
+
+- **Equipo operativo**: Dispone de simuladores que le permiten explorar escenarios y tomar decisiones basadas en datos sin depender del analista para cada consulta.
+- **Dirección estratégica**: Accede a dashboards en vivo con KPIs actualizados, sin esperar a que se genere un reporte periódico.
+- **Equipo de datos**: Centraliza la lógica de negocio en una única base de código (scripts `.R`) que alimenta tanto los reportes estáticos como las aplicaciones interactivas, reduciendo la duplicación y las inconsistencias.
+
+En definitiva, **Shiny convierte a R en una plataforma BI completa**: los reportes R Markdown documentan y comunican hallazgos, mientras que las aplicaciones Shiny permiten explorar, simular y monitorear en tiempo real, cubriendo desde el análisis operativo más granular hasta la toma de decisiones estratégica de alto nivel.
+
+---
+
+## Mapa completo del proceso BI con R
+
+A continuación se presenta una visión integrada de todo el flujo de trabajo BI con R, articulando cada fase del proceso con las tecnologías, herramientas y buenas prácticas estudiadas en este documento. Este esquema unifica los conceptos presentados en las secciones anteriores en un solo mapa de referencia.
+
+```
+DATOS        ANÁLISIS Y MODELADO       DOCUMENTACIÓN Y REPORTES      INTERACCIÓN
+CRUDOS       (scripts .R)              (R Markdown / .md)            (Shiny)
+-----        ------------------        ------------------------      -------------
+
+  +----------+   +--------------+   +--------------+   +--------------+
+  |  Fuentes  |   | Extracción   |   | Reporte .Rmd |   | Dashboard    |
+  |  de datos |-->| y limpieza   |-->| (HTML/PDF/   |-->| Shiny        |
+  |           |   | (dplyr/tidyr)|   |  Word)       |   | (en vivo)    |
+  +----------+   +--------------+   +--------------+   +--------------+
+  • SQL (DBI)         |                    |                   |
+  • CSV / Excel       v                    v                   v
+  • APIs (httr)   +--------------+   +--------------+   +--------------+
+  • Big Data      | Análisis     |   | Documentación|   | Simuladores  |
+  • Cloud (S3)    | estadístico  |-->| .md (GitHub  |-->| operativos   |
+                  | y modelado   |   |  Pages/README|   | (riesgo,     |
+                  |              |   |  /wiki)      |   |  inventario) |
+                  +--------------+   +--------------+   +--------------+
+                        |                   |                   |
+                        v                   v                   v
+                  +----------------------------------------------+
+                  |         CONTROL DE VERSIONES (Git)           |
+                  |  +--------+   +--------+   +--------+   +--------+  |
+                  |  | Scripts|   |Reportes|   |Dashboar|   |   CI   |  |
+                  |  |  .R    |   |  .Rmd  |   | Shiny  |   |Actions |  |
+                  |  +--------+   +--------+   +--------+   +--------+  |
+                  |               repositorio GitHub                     |
+                  +----------------------------------------------+
+                                       |
+                          +------------+------------+
+                          v                         v
+                  +------------------+   +----------------------+
+                  |  EQUIPO DATOS   |   |  STAKEHOLDERS        |
+                  |  • Edita .R/.Rmd|   |  • Lee reportes .md  |
+                  |  • PR + code    |   |  • Abre dashboard    |
+                  |    review       |   |    Shiny (URL)       |
+                  |  • renv::res-   |   |  • Consulta KPIs en  |
+                  |    tore()       |   |    vivo              |
+                  +------------------+   +----------------------+
+```
+
+### Capas tecnológicas del ecosistema
+
+| Capa                     | Tecnología / Herramienta                           | Propósito                                                |
+|--------------------------|----------------------------------------------------|----------------------------------------------------------|
+| **Datos**                | `DBI`, `odbc`, `readr`, `httr`, `jsonlite`, `arrow` | Conexión a fuentes: SQL, CSV, APIs, Big Data, cloud      |
+| **Transformación**       | `dplyr`, `tidyr`, `data.table`                     | Limpieza, agregación y preparación de datos               |
+| **Análisis y modelado**  | Modelos estadísticos nativos (regresión, series temporales, clustering, árboles) | Obtención de insights y predicciones      |
+| **Visualización**        | `ggplot2`, `plotly`, `leaflet`                     | Gráficos estáticos e interactivos, mapas                  |
+| **Reportes dinámicos**   | `rmarkdown`, `flexdashboard`                       | Documentos reproducibles con código y narrativa           |
+| **Documentación estática** | Markdown (`.md`)                                 | README, wikis, guías visibles en GitHub                   |
+| **Aplicaciones interactivas** | `shiny`                                        | Dashboards ejecutivos y simuladores operativos            |
+| **Control de versiones** | Git + GitHub                                       | Historial, colaboración, PRs, trazabilidad                |
+| **Entorno reproducible** | `renv`                                             | `renv.lock` con versiones exactas de paquetes             |
+| **CI/CD**                | GitHub Actions                                     | Renderizado automático de `.Rmd`, despliegue de Shiny     |
+| **Publicación**          | GitHub Pages, Posit Connect, shinyapps.io          | Visibilidad web de reportes y dashboards                  |
+
+### Flujo de trabajo colaborativo por rol
+
+Cada perfil dentro de la organización interactúa con el ecosistema BI en distintos niveles:
+
+```
+ROL                  ACCIÓN PRINCIPAL                          HERRAMIENTAS QUE USA
+---                  ----------------                          -------------------
+Analista de datos    Escribe scripts .R, crea reportes .Rmd    RStudio, Git, renv
+Científico de datos  Desarrolla modelos predictivos            R, ggplot2, caret, tidymodels
+Ingeniero de datos   Automatiza extracciones y CI/CD           DBI, GitHub Actions, renv
+Analista de negocio  Ejecuta simuladores, explora escenarios   Shiny (como usuario)
+Director / Gerente   Consulta KPIs en dashboards en vivo       Shiny (navegador web)
+Revisor / Auditor    Valida PRs, revisa historial de cambios   GitHub (code review)
+```
+
+### Ciclo de vida completo
+
+El proceso no termina con la publicación: los hallazgos generan nuevas preguntas, los datos se actualizan y los modelos se refinan. El ciclo se reinicia constantemente:
+
+```
+        +-----------------------------------------------------+
+        |                      PREGUNTA                       |
+        |              de negocio o  de datos                 |
+        +--------------------+--------------------------------+
+                             |
+                             v
+        +-----------------------------------------------------+
+        |               EXTRACCION Y LIMPIEZA                 |
+        |          (scripts .R + renv + Git)                  |
+        +--------------------+--------------------------------+
+                             |
+                             v
+        +-----------------------------------------------------+
+        |           ANALISIS Y MODELADO                        |
+        |      (modelos estadisticos + visualizacion)          |
+        +---------+----------------------+--------------------+
+                  |                      |
+                  v                      v
+        +------------------+   +----------------------+
+        | REPORTE DINAMICO  |   |  APLICACION SHINY    |
+        | (.Rmd -> HTML/PDF)|   |  (dashboard /        |
+        | Documentacion     |   |   simulador)         |
+        | tecnica y ejecutiva|  |  Interactividad      |
+        +---------+---------+   +----------+-----------+
+                  |                        |
+                  +----------+-------------+
+                             |
+                             v
+        +-----------------------------------------------------+
+        |         PUBLICACION Y DIFUSION                      |
+        |  (GitHub Pages / Posit Connect / correo)            |
+        |  + Documentacion .md en GitHub                      |
+        +--------------------+--------------------------------+
+                             |
+                             |  <- retroalimentacion: nuevos datos,
+                             |     nuevas preguntas, modelos
+                             |     que actualizar
+                             v
+                    (vuelve al inicio)
+```
+
+Este es el ecosistema completo: un ciclo continuo donde los datos crudos se transforman en conocimiento accionable, documentado y accesible para toda la organización, respaldado por control de versiones, entornos reproducibles y automatización.
+
+---
+
 ## Conclusión
 
-R es una solución BI **poderosa, flexible y gratuita** que cubre todo el ciclo de vida del análisis de datos: desde la extracción y limpieza hasta la visualización, modelado predictivo y generación de reportes automatizados. Si bien herramientas como Power BI o Tableau ofrecen una experiencia más visual e inmediata, R destaca cuando se requiere **rigor estadístico**, **reproducibilidad** y **personalización avanzada**, convirtiéndolo en una opción ideal para equipos de datos que buscan una solución BI completa y escalable sin depender de software propietario.
+R es una solución BI **poderosa, flexible y gratuita** que cubre todo el ciclo de vida del análisis de datos: desde la extracción y limpieza hasta la visualización, modelado predictivo, generación de reportes automatizados y creación de dashboards interactivos. Si bien herramientas como Power BI o Tableau ofrecen una experiencia más visual e inmediata, R destaca cuando se requiere **rigor estadístico**, **reproducibilidad**, **personalización avanzada** y **capacidad de simulación interactiva**, convirtiéndolo en una opción ideal para equipos de datos que buscan una solución BI completa y escalable sin depender de software propietario.

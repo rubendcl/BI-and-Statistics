@@ -1,0 +1,427 @@
+---
+title: "Dashboard de Cuota de Ventas"
+author: "Equipo BI"
+date: "`r Sys.Date()`"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    theme: cosmo
+    social: menu
+    source: https://github.com/rubendcl/BI-and-Statistics
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+# =============================================================================
+# Configuracion inicial: paquetes y generacion de datos
+# =============================================================================
+# Este dashboard ilustra los conceptos de la Seccion 3 de R_para_BI.md:
+# "Shiny en el trabajo estrategico: tableros de control y dashboards"
+# =============================================================================
+
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(shiny)
+library(flexdashboard)
+library(scales)
+
+# ---------------------------------------------------------------------------
+# Generar datos artificiales con numeros aleatorios (set.seed para
+# reproducibilidad, como se explica en R_para_BI.md)
+# ---------------------------------------------------------------------------
+set.seed(123)
+
+meses <- c("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+           "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre")
+regiones <- c("Norte", "Sur", "Este", "Oeste")
+cuota_mensual <- 150000  # Cuota mensual por region
+
+# Generar 12 meses de datos para permitir seleccion mensual
+ventas <- do.call(rbind, lapply(seq_along(meses), function(m) {
+  expand.grid(
+    dia    = 1:30,
+    region = regiones,
+    stringsAsFactors = FALSE
+  ) %>%
+    mutate(
+      mes         = meses[m],
+      mes_num     = m,
+      anio        = 2026,
+      monto_base  = case_when(
+        region == "Norte" ~ 5000 + rnorm(1, 0, 200),
+        region == "Sur"   ~ 4500 + rnorm(1, 0, 200),
+        region == "Este"  ~ 5500 + rnorm(1, 0, 200),
+        region == "Oeste" ~ 4000 + rnorm(1, 0, 200)
+      ),
+      dia_semana = (dia - 1) %% 7 + 1,
+      factor_dia = case_when(
+        dia_semana == 1 ~ 0.8,
+        dia_semana == 2 ~ 0.9,
+        dia_semana == 3 ~ 1.0,
+        dia_semana == 4 ~ 1.1,
+        dia_semana == 5 ~ 1.2,
+        TRUE            ~ 0.7
+      ),
+      # Efecto estacional: ventas mas altas en Q4
+      factor_estacional = 1 + case_when(
+        m >= 10 ~ 0.2,
+        m >= 7  ~ 0.1,
+        m >= 4  ~ 0.05,
+        TRUE    ~ 0.0
+      ),
+      factor_mes = (1 + (dia / 30) * 0.3) * factor_estacional,
+      monto = round(
+        monto_base * factor_dia * factor_mes +
+          rnorm(n(), mean = 0, sd = 1000),
+        0
+      ),
+      monto = pmax(monto, 500),
+      fecha = as.Date(paste(anio, m, dia, sep = "-"))
+    )
+})) %>%
+  select(fecha, mes, mes_num, anio, region, monto, dia)
+```
+
+Fila {data-height=120}
+=======================================================================
+
+### Ventas acumuladas del mes
+
+```{r}
+renderValueBox({
+  datos_mes <- ventas %>% filter(mes_num == as.numeric(input$sel_mes))
+  total <- sum(datos_mes$monto)
+  valueBox(
+    value = dollar(total, prefix = "$", big.mark = ","),
+    caption = "Ventas acumuladas",
+    icon = "fa-chart-line",
+    color = "primary"
+  )
+})
+```
+
+### Cuota de ventas (KPI principal)
+
+```{r}
+renderValueBox({
+  req(input$sel_mes)
+  datos_mes <- ventas %>% filter(mes_num == as.numeric(input$sel_mes))
+  total     <- sum(datos_mes$monto)
+  cuota     <- cuota_mensual * length(regiones)
+  pct       <- total / cuota
+  
+  color_kpi <- ifelse(pct >= 1, "success",
+                      ifelse(pct >= 0.85, "warning", "danger"))
+  
+  valueBox(
+    value = percent(pct, accuracy = 0.1),
+    caption = "Cumplimiento de cuota mensual",
+    icon = "fa-bullseye",
+    color = color_kpi
+  )
+})
+```
+
+### Promedio diario
+
+```{r}
+renderValueBox({
+  datos_mes <- ventas %>% filter(mes_num == as.numeric(input$sel_mes))
+  prom <- mean(datos_mes$monto)
+  valueBox(
+    value = dollar(prom, prefix = "$", big.mark = ","),
+    caption = "Venta promedio por dia",
+    icon = "fa-calculator",
+    color = "info"
+  )
+})
+```
+
+### Region lider
+
+```{r}
+renderValueBox({
+  datos_mes <- ventas %>% filter(mes_num == as.numeric(input$sel_mes))
+  lider <- datos_mes %>%
+    group_by(region) %>%
+    summarise(total = sum(monto), .groups = "drop") %>%
+    slice_max(total, n = 1)
+  
+  valueBox(
+    value = lider$region,
+    caption = paste("Region lider (", dollar(lider$total, prefix = "$"), ")", sep = ""),
+    icon = "fa-trophy",
+    color = "warning"
+  )
+})
+```
+
+Fila {data-height=100}
+=======================================================================
+
+### Controles interactivos
+
+```{r}
+fluidRow(
+  column(width = 4,
+    selectInput("sel_mes", "Seleccionar mes:",
+                choices = setNames(1:12, meses),
+                selected = 6,
+                width = "100%")
+  ),
+  column(width = 4,
+    selectInput("sel_region", "Filtrar por region:",
+                choices = c("Todas las regiones", regiones),
+                selected = "Todas las regiones",
+                width = "100%")
+  ),
+  column(width = 4,
+    br(),
+    actionButton("actualizar", "Actualizar dashboard",
+                 icon = icon("refresh"),
+                 class = "btn-primary",
+                 style = "width: 100%")
+  )
+)
+```
+
+Fila {data-height=450}
+=======================================================================
+
+### Cuota de ventas por region
+
+```{r}
+renderPlotly({
+  req(input$sel_mes)
+  datos_mes <- ventas %>% filter(mes_num == as.numeric(input$sel_mes))
+  
+  resumen <- datos_mes %>%
+    group_by(region) %>%
+    summarise(
+      total_ventas = sum(monto),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      cuota        = cuota_mensual,
+      cumplimiento = total_ventas / cuota,
+      estado       = case_when(
+        cumplimiento >= 1   ~ "Cumplida",
+        cumplimiento >= 0.85 ~ "En riesgo",
+        TRUE                 ~ "No cumplida"
+      )
+    )
+  
+  plot_ly(resumen) %>%
+    add_trace(
+      x = ~region,
+      y = ~total_ventas,
+      name = "Ventas reales",
+      type = "bar",
+      marker = list(
+        color = ~cumplimiento,
+        colorscale = list(c(0, "#dc3545"), c(0.85, "#ffc107"), c(1, "#28a745")),
+        line = list(color = "#333", width = 1.5)
+      ),
+      hovertemplate = paste(
+        "<b>%{x}</b><br>",
+        "Ventas: $%{y:,.0f}<br>",
+        "Cuota: $", format(cuota_mensual, big.mark = ","), "<br>",
+        "Cumplimiento: %{text}",
+        "<extra></extra>"
+      ),
+      text = ~percent(cumplimiento, accuracy = 0.1)
+    ) %>%
+    add_trace(
+      x = ~region,
+      y = ~cuota,
+      name = "Cuota ($150K)",
+      type = "scatter",
+      mode = "lines+markers",
+      line = list(color = "#e74c3c", width = 3, dash = "dash"),
+      marker = list(color = "#e74c3c", size = 8),
+      hovertemplate = paste(
+        "<b>%{x}</b><br>",
+        "Cuota: $%{y:,.0f}",
+        "<extra></extra>"
+      )
+    ) %>%
+    layout(
+      title = list(
+        text = paste("Cumplimiento de cuota -", meses[as.numeric(input$sel_mes)]),
+        font = list(size = 16)
+      ),
+      xaxis = list(title = "", tickfont = list(size = 14)),
+      yaxis = list(
+        title = "Monto (USD)",
+        tickprefix = "$",
+        rangemode = "tozero"
+      ),
+      barmode = "group",
+      hovermode = "x unified",
+      legend = list(orientation = "h", y = -0.2),
+      margin = list(l = 60, r = 30, t = 50, b = 80)
+    ) %>%
+    config(displayModeBar = FALSE)
+})
+```
+
+### Evolucion diaria de ventas
+
+```{r}
+renderPlotly({
+  req(input$sel_mes)
+  
+  datos_mes <- ventas %>% filter(mes_num == as.numeric(input$sel_mes))
+  
+  if (input$sel_region != "Todas las regiones") {
+    datos_mes <- datos_mes %>% filter(region == input$sel_region)
+  }
+  
+  evolucion <- datos_mes %>%
+    group_by(fecha) %>%
+    summarise(diario = sum(monto), .groups = "drop") %>%
+    mutate(
+      acumulado = cumsum(diario),
+      meta_diaria = (cuota_mensual * length(regiones)) / 30,
+      meta_acumulada = cumsum(rep(meta_diaria, n()))
+    )
+  
+  plot_ly(evolucion) %>%
+    add_trace(
+      x = ~fecha,
+      y = ~diario,
+      name = "Ventas diarias",
+      type = "bar",
+      marker = list(color = "#3498db", opacity = 0.7),
+      hovertemplate = "%{x|%d/%m}: $%{y:,.0f}<extra></extra>"
+    ) %>%
+    add_trace(
+      x = ~fecha,
+      y = ~acumulado,
+      name = "Acumulado",
+      type = "scatter",
+      mode = "lines+markers",
+      yaxis = "y2",
+      line = list(color = "#2ecc71", width = 3),
+      marker = list(color = "#2ecc71", size = 5),
+      hovertemplate = "Acumulado: $%{y:,.0f}<extra></extra>"
+    ) %>%
+    add_trace(
+      x = ~fecha,
+      y = ~meta_acumulada,
+      name = "Meta acumulada",
+      type = "scatter",
+      mode = "lines",
+      yaxis = "y2",
+      line = list(color = "#e74c3c", width = 2, dash = "dot"),
+      hovertemplate = "Meta: $%{y:,.0f}<extra></extra>"
+    ) %>%
+    layout(
+      title = list(
+        text = paste("Evolucion diaria -", meses[as.numeric(input$sel_mes)],
+                     ifelse(input$sel_region != "Todas las regiones",
+                            paste("-", input$sel_region), "")),
+        font = list(size = 16)
+      ),
+      xaxis = list(title = "", tickformat = "%d/%m"),
+      yaxis = list(
+        title = "Ventas diarias (USD)",
+        tickprefix = "$",
+        side = "left",
+        rangemode = "tozero"
+      ),
+      yaxis2 = list(
+        title = "Acumulado (USD)",
+        tickprefix = "$",
+        overlaying = "y",
+        side = "right",
+        rangemode = "tozero"
+      ),
+      hovermode = "x unified",
+      legend = list(orientation = "h", y = -0.3),
+      margin = list(l = 60, r = 60, t = 50, b = 100)
+    ) %>%
+    config(displayModeBar = FALSE)
+})
+```
+
+Fila {data-height=350}
+=======================================================================
+
+### Distribucion de montos
+
+```{r}
+renderPlotly({
+  req(input$sel_mes)
+  
+  datos_mes <- ventas %>% filter(mes_num == as.numeric(input$sel_mes))
+  
+  if (input$sel_region != "Todas las regiones") {
+    datos_mes <- datos_mes %>% filter(region == input$sel_region)
+  }
+  
+  p <- ggplot(datos_mes, aes(x = monto, fill = region)) +
+    geom_histogram(bins = 20, alpha = 0.7, color = "white", size = 0.3) +
+    facet_wrap(~region, ncol = 2, scales = "free_y") +
+    scale_fill_manual(values = c(
+      "Norte" = "#3498db",
+      "Sur"   = "#e74c3c",
+      "Este"  = "#2ecc71",
+      "Oeste" = "#f39c12"
+    )) +
+    scale_x_continuous(labels = dollar_format(prefix = "$")) +
+    labs(
+      title = "Distribucion de montos por region",
+      x = "Monto",
+      y = "Frecuencia"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      legend.position = "none",
+      strip.text = element_text(face = "bold", size = 12),
+      plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+      panel.grid.minor = element_blank()
+    )
+  
+  ggplotly(p, tooltip = c("x", "y", "fill")) %>%
+    config(displayModeBar = FALSE)
+})
+```
+
+### Tabla resumen por region
+
+```{r}
+renderTable({
+  req(input$sel_mes)
+  
+  ventas %>%
+    filter(mes_num == as.numeric(input$sel_mes)) %>%
+    group_by(region) %>%
+    summarise(
+      "Ventas totales"      = dollar(sum(monto), prefix = "$", big.mark = ","),
+      "Cuota asignada"      = dollar(cuota_mensual, prefix = "$", big.mark = ","),
+      "Cumplimiento"        = percent(sum(monto) / cuota_mensual, accuracy = 0.1),
+      "Promedio diario"     = dollar(mean(monto), prefix = "$", big.mark = ","),
+      "Dias sobre meta"     = sum(monto > (cuota_mensual / 30)),
+      "Mejor dia"           = as.character(dia[which.max(monto)]),
+      .groups = "drop"
+    ) %>%
+    arrange(desc(ventas))
+}, striped = TRUE, hover = TRUE, bordered = TRUE, spacing = "m",
+   align = "lrrrrrr", width = "100%")
+```
+
+### Notas del dashboard
+
+Este dashboard ilustra los conceptos de la seccion **"Shiny en el trabajo estrategico: tableros de control y dashboards"** del documento `R_para_BI.md`:
+
+- **KPIs interactivos**: Value boxes que se actualizan al cambiar el mes o la region.
+- **Cumplimiento de cuota**: El color del KPI principal cambia automaticamente:
+  - <span style="color:#28a745;">**Verde**</span>: Cuota cumplida (&ge; 100%)
+  - <span style="color:#ffc107;">**Amarillo**</span>: En riesgo (&ge; 85%)
+  - <span style="color:#dc3545;">**Rojo**</span>: No cumplida (< 85%)
+- **Visualizaciones**: Graficos de barras, lineas de evolucion e histogramas.
+- **Datos artificiales**: Generados con `set.seed(123)` para reproducibilidad total.
+
+Los datos simulan **4 regiones** (Norte, Sur, Este, Oeste) con una **cuota mensual de $150,000** cada una, durante 12 meses del ano 2026.
